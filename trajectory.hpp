@@ -59,25 +59,31 @@ StateVector toStateVector(const OrbitalElements oe, double mu, double epoch) {
   if (isEllipse)
     meanAnomaly = fmod(meanAnomaly, 2*pi<float>());
   // Mean anomaly to Eccentric anomaly, to true anomaly
-  double En, trueAnomaly;
+  double En, cosTrueAnomaly, sinTrueAnomaly;
   if (isParabola) {
     En = meanToEccParabola(meanAnomaly);
-    trueAnomaly = 2*atan(En);
+    const double d = En*En+1;
+    cosTrueAnomaly = (1-En*En)/d;
+    sinTrueAnomaly = (2*En)/d;
   } else if (isHyperbola) {
     En = meanToEccHyperbola(meanAnomaly, e);
-    trueAnomaly = 2*atan2(sqrt(1+e)*sinh(En/2), sqrt(e-1)*cosh(En/2));
+    const double d = 1 - e*cosh(En);
+    cosTrueAnomaly = (cosh(En)-e)/d;
+    sinTrueAnomaly = (sqrt(e*e-1)*sinh(En))/d;
   } else if (isEllipse) {
     En = meanToEccEllipse(meanAnomaly, e);
-    trueAnomaly = 2*atan2(sqrt(1+e)*sin(En/2), sqrt(1-e)*cos(En/2));
+    const double d = 1 - e*cos(En);
+    cosTrueAnomaly = (cos(En)-e)/d;
+    sinTrueAnomaly = (sqrt(1-e*e)*sin(En))/d;
   }
   // Distance from parent body
   double dist;
-  if (isParabola) dist = (2*a)/(1+cos(trueAnomaly));
-  else dist = a*((1-e*e)/(1+e*cos(trueAnomaly)));
+  if (isParabola) dist = (2*a)/(1+cosTrueAnomaly);
+  else dist = a*((1-e*e)/(1+e*cosTrueAnomaly));
   // Position of body
   const dvec3 posInPlane = dist*dvec3(
-    cos(trueAnomaly),
-    sin(trueAnomaly),
+    cosTrueAnomaly,
+    sinTrueAnomaly,
     0.0);
 
   // Velocity of body
@@ -102,4 +108,7 @@ StateVector toStateVector(const OrbitalElements oe, double mu, double epoch) {
     * rotate(dquat(1,0,0,0), oe.i  , dvec3(0,1,0))
     * rotate(dquat(1,0,0,0), oe.arg, dvec3(0,0,1));
   return {q*posInPlane, q*(v*velInPlane)};
+}
+OrbitalElements toOrbitalElements(const StateVector sv, double mu) {
+
 }

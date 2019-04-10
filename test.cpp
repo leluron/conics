@@ -9,7 +9,7 @@ int main(void) {
   double earth_r = 6371;
 
   double r_peri = earth_r+180;
-  double ecc = 0.9;
+  double ecc = 1.1;
   double a = ((ecc==1)?r_peri:(r_peri/(1-ecc)));
 
   OrbitalElements oe{ecc, a, 0,0,0,0};
