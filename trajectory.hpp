@@ -34,7 +34,7 @@ static double meanToEccParabola(const double mean) {
 
 class StateVector {
 public:
-  glm::dvec3 p, v;
+  glm::dvec3 r, v;
 };
 
 class OrbitalElements {
@@ -109,6 +109,30 @@ StateVector toStateVector(const OrbitalElements oe, double mu, double epoch) {
     * rotate(dquat(1,0,0,0), oe.arg, dvec3(0,0,1));
   return {q*posInPlane, q*(v*velInPlane)};
 }
-OrbitalElements toOrbitalElements(const StateVector sv, double mu) {
+OrbitalElements toOrbitalElements(const StateVector sv, double mu, double epoch) {
+  const dvec3 rv = sv.r;
+  const dvec3 v = sv.v;
+  const double r = length(rv);
 
+  const dvec3 h = cross(rv, v);
+  const dvec3 ev = cross(rv, h)/mu - rv/r;
+  const double e = length(ev);
+  const dvec3 nv = cross(dvec3(0,0,1), h);
+  const double n = length(nv);
+
+  double trueAnomaly = acos(dot(ev,rv)/(e*r));
+  if (dot(rv, v) < 0) trueAnomaly = 2*pi<double>() - trueAnomaly;
+
+  const double i = acos(h.z/length(h));
+  const double En = 2*atan2(tan(trueAnomaly/2), sqrt((1+e)/(1-e)));
+  double an = acos(nv.x/n);
+  if (nv.y < 0) an = 2.0*pi<double>() - an;
+  double arg = acos(dot(nv,ev)/(n*e));
+  if (ev.z < 0 ) arg = 2.0*pi<double>() - arg;
+  const double meanAnomaly = En - e*sin(En);
+  const double a = 1.0/(2.0/r - length(r)*length(r)/mu);
+  const double meanMotion = sqrt(mu/abs(a*a*a));
+  const double m0 = meanAnomaly - epoch*meanMotion;
+
+  return {e, a, i, an, arg, m0};
 }

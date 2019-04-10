@@ -18,10 +18,12 @@ int main(void) {
 
   while (epoch < 600) {
     auto sv = toStateVector(oe, earth_mu, epoch);
-    double alt = glm::length(sv.p)-earth_r;
+    double alt = glm::length(sv.r)-earth_r;
     double vel = glm::length(sv.v);
-    cout << epoch << "s :" << glm::to_string(sv.p) << " " << glm::to_string(sv.v) << endl;
+    cout << epoch << "s :" << glm::to_string(sv.r) << " " << glm::to_string(sv.v) << endl;
+    auto oe2 = toOrbitalElements(sv, earth_mu, epoch);
     cout << alt << " " << vel << endl;
+    cout << oe2.e << " " << oe2.a << " " << oe2.m0 << endl;
     epoch += 60;
   }
 }
