@@ -4,6 +4,7 @@
 #include <glm/gtc/type_ptr.hpp>
 #include <glm/gtc/constants.hpp>
 #include <glm/gtc/matrix_transform.hpp>
+#include <glm/gtx/norm.hpp>
 
 static double meanToEccEllipse(const double mean, const double ecc) {
   // Newton to find eccentric anomaly (En)
@@ -28,7 +29,7 @@ static double meanToEccParabola(const double mean) {
   double En = mean; // Starting value of En
   const int it = 20; // Number of iterations
   for (int i=0;i<it;++i)
-    En -= (En+(En*En*En)/3-mean)/(1+En*En);
+    En -= (En+En*En*En/3-mean)/(1+En*En);
   return En;
 }
 
@@ -65,11 +66,14 @@ StateVector toStateVector(const OrbitalElements oe, double mu, double epoch) {
     const double d = En*En+1;
     cosTrueAnomaly = (1-En*En)/d;
     sinTrueAnomaly = (2*En)/d;
+    const double l = 2*atan(En);
+    cosTrueAnomaly = cos(l);
+    sinTrueAnomaly = sin(l);
   } else if (isHyperbola) {
     En = meanToEccHyperbola(meanAnomaly, e);
     const double d = 1 - e*cosh(En);
     cosTrueAnomaly = (cosh(En)-e)/d;
-    sinTrueAnomaly = (sqrt(e*e-1)*sinh(En))/d;
+    sinTrueAnomaly = (sqrt(e*e-1)*sinh(En))/-d;
   } else if (isEllipse) {
     En = meanToEccEllipse(meanAnomaly, e);
     const double d = 1 - e*cos(En);
@@ -114,25 +118,49 @@ OrbitalElements toOrbitalElements(const StateVector sv, double mu, double epoch)
   const dvec3 v = sv.v;
   const double r = length(rv);
 
+  // Eccentricity
   const dvec3 h = cross(rv, v);
-  const dvec3 ev = cross(rv, h)/mu - rv/r;
-  const double e = length(ev);
-  const dvec3 nv = cross(dvec3(0,0,1), h);
-  const double n = length(nv);
+  const dvec3 dir = normalize(rv);
+  const dvec3 ev = cross(v, h)/mu - dir;
+  double e = length(ev);
+  const dvec3 edir = normalize(ev);
+  dvec3 nv = cross(dvec3(0,0,1), h);
+  if (length(nv) == 0) nv = dvec3(1,0,0);
+  else nv = normalize(nv);
 
-  double trueAnomaly = acos(dot(ev,rv)/(e*r));
+  // Semi-major axis (or q for parabolic orbits)
+  double a = 1.0/(2.0/r - length2(v)/mu);
+  if (a == HUGE_VAL) {
+    e = 1.0;
+    a = length2(h)/(2*mu);
+  }
+
+  // True anomaly
+  double trueAnomaly = acos(dot(edir,dir));
   if (dot(rv, v) < 0) trueAnomaly = 2*pi<double>() - trueAnomaly;
 
-  const double i = acos(h.z/length(h));
-  const double En = 2*atan2(tan(trueAnomaly/2), sqrt((1+e)/(1-e)));
-  double an = acos(nv.x/n);
-  if (nv.y < 0) an = 2.0*pi<double>() - an;
-  double arg = acos(dot(nv,ev)/(n*e));
-  if (ev.z < 0 ) arg = 2.0*pi<double>() - arg;
-  const double meanAnomaly = En - e*sin(En);
-  const double a = 1.0/(2.0/r - length(r)*length(r)/mu);
+  // Eccentric anomaly
+  double En, meanAnomaly;
+  if (e == 1) {
+    En = tan(trueAnomaly/2);
+    meanAnomaly = En + En*En*En/3;
+  } else if (e < 1) {
+    En = 2*atan2(tan(trueAnomaly/2), sqrt((1+e)/(1-e)));
+    meanAnomaly = En - e*sin(En);
+  } else {
+    En = 2*atanh(sqrt((e-1)/(1+e))*tan(trueAnomaly/2));
+    meanAnomaly = e*sinh(En) - En;
+  }
+  // Mean anomaly
   const double meanMotion = sqrt(mu/abs(a*a*a));
   const double m0 = meanAnomaly - epoch*meanMotion;
+
+  // Rotation
+  const double i = acos(h.z/length(h));
+  double an = acos(nv.x);
+  if (nv.y < 0) an = 2.0*pi<double>() - an;
+  double arg = acos(dot(nv,edir));
+  if (ev.z < 0 ) arg = 2.0*pi<double>() - arg;
 
   return {e, a, i, an, arg, m0};
 }
