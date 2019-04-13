@@ -24,12 +24,12 @@ static double meanToEccHyperbola(const double mean, const double ecc) {
   return En;
 }
 
-static double meanToEccParabola(const double mean) {
+static double meanToEccParabola(const double mean, const double q) {
   // Newton to find eccentric anomaly (En)
   double En = mean; // Starting value of En
   const int it = 20; // Number of iterations
   for (int i=0;i<it;++i)
-    En -= (En+En*En*En/3-mean)/(1+En*En);
+    En -= (q*En+En*En*En/6-mean)/(q+En*En/2);
   return En;
 }
 
@@ -54,7 +54,7 @@ StateVector toStateVector(const OrbitalElements oe, double mu, double epoch) {
   const bool isHyperbola = (e>1);
   const bool isEllipse = (e<1);
   // Mean Anomaly compute
-  const double meanMotion = sqrt(mu/abs(a*a*a));
+  const double meanMotion = sqrt(mu/(isParabola?1:abs(a*a*a)));
   double meanAnomaly = epoch*meanMotion + oe.m0;
   // Cap true anomaly in case of elliptic orbit
   if (isEllipse)
@@ -62,13 +62,10 @@ StateVector toStateVector(const OrbitalElements oe, double mu, double epoch) {
   // Mean anomaly to Eccentric anomaly, to true anomaly
   double En, cosTrueAnomaly, sinTrueAnomaly;
   if (isParabola) {
-    En = meanToEccParabola(meanAnomaly);
-    const double d = En*En+1;
-    cosTrueAnomaly = (1-En*En)/d;
-    sinTrueAnomaly = (2*En)/d;
-    const double l = 2*atan(En);
-    cosTrueAnomaly = cos(l);
-    sinTrueAnomaly = sin(l);
+    En = meanToEccParabola(meanAnomaly, a);
+    const double d = 2*a+En*En;
+    cosTrueAnomaly = (2*a-En*En)/d;
+    sinTrueAnomaly = (2*sqrt(2*a)*En)/d;
   } else if (isHyperbola) {
     En = meanToEccHyperbola(meanAnomaly, e);
     const double d = 1 - e*cosh(En);
@@ -82,7 +79,7 @@ StateVector toStateVector(const OrbitalElements oe, double mu, double epoch) {
   }
   // Distance from parent body
   double dist;
-  if (isParabola) dist = (2*a)/(1+cosTrueAnomaly);
+  if (isParabola) dist = a + (En*En/2);
   else dist = a*((1-e*e)/(1+e*cosTrueAnomaly));
   // Position of body
   const dvec3 posInPlane = dist*dvec3(
@@ -91,11 +88,11 @@ StateVector toStateVector(const OrbitalElements oe, double mu, double epoch) {
     0.0);
 
   // Velocity of body
-  const double v = sqrt(mu*abs(a))/dist;
+  const double v = (isParabola)?sqrt(mu/dist):sqrt(mu*abs(a))/dist;
   dvec3 velInPlane;
   if (isParabola) velInPlane = dvec3(
-    -sin(En),
-    cos(En)*sqrt(2),
+    -sqrt(1-cosTrueAnomaly),
+    sqrt(cosTrueAnomaly+1),
     0.0);
   else if (isHyperbola) velInPlane = dvec3(
     -sinh(En),
@@ -129,11 +126,10 @@ OrbitalElements toOrbitalElements(const StateVector sv, double mu, double epoch)
   else nv = normalize(nv);
 
   // Semi-major axis (or q for parabolic orbits)
-  double a = 1.0/(2.0/r - length2(v)/mu);
-  if (a == HUGE_VAL) {
-    e = 1.0;
-    a = length2(h)/(2*mu);
-  }
+  const double a_inv = (2.0/r - length2(v)/mu);
+  double a;
+  if (e==1) a = length2(h)/(2*mu);
+  else a = 1.0/a_inv;
 
   // True anomaly
   double trueAnomaly = acos(dot(edir,dir));
