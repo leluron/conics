@@ -1,4 +1,5 @@
 #pragma once
+
 #include <glm/glm.hpp>
 #include <glm/gtc/quaternion.hpp>
 #include <glm/gtc/type_ptr.hpp>
@@ -34,28 +35,45 @@ static double meanToEccParabola(const double mean, const double q) {
 }
 
 class StateVector {
+  glm::dvec3 _r, _v;
 public:
-  glm::dvec3 r, v;
+  StateVector(glm::dvec3 r, glm::dvec3 v) { _r = r; _v = v;}
+  glm::dvec3 r() const { return _r; }
+  glm::dvec3 v() const { return _v; }
 };
 
 class OrbitalElements {
-public:
-  double e, a, i, an, arg, m0;
   // for parabolic orbits a is q
+  double _e, _a, _i, _an, _arg, _m0;
+public:
+  OrbitalElements(double e, double a, double i, double an, double arg, double m0) {
+    _e = e;
+    _a = a;
+    _i = i;
+    _an = an;
+    _arg = arg;
+    _m0 = m0;
+  }
+  double e() const { return _e; }
+  double a() const { return _a; }
+  double i() const { return _i; }
+  double an() const { return _an; }
+  double arg() const { return _arg; }
+  double m0() const { return _m0; }
 };
 
 using namespace glm;
 
 StateVector toStateVector(const OrbitalElements oe, double mu, double epoch) {
-  const double a = oe.a;
-  const double e = oe.e;
+  const double a = oe.a();
+  const double e = oe.e();
   // Conics
   const bool isParabola = (e==1);
   const bool isHyperbola = (e>1);
   const bool isEllipse = (e<1);
   // Mean Anomaly compute
   const double meanMotion = sqrt(mu/(isParabola?1:abs(a*a*a)));
-  double meanAnomaly = epoch*meanMotion + oe.m0;
+  double meanAnomaly = epoch*meanMotion + oe.m0();
   // Cap true anomaly in case of elliptic orbit
   if (isEllipse)
     meanAnomaly = fmod(meanAnomaly, 2*pi<float>());
@@ -105,14 +123,14 @@ StateVector toStateVector(const OrbitalElements oe, double mu, double epoch) {
 
   // Rotation
   const dquat q =
-      rotate(dquat(1,0,0,0), oe.an , dvec3(0,0,1))
-    * rotate(dquat(1,0,0,0), oe.i  , dvec3(0,1,0))
-    * rotate(dquat(1,0,0,0), oe.arg, dvec3(0,0,1));
+      rotate(dquat(1,0,0,0), oe.an() , dvec3(0,0,1))
+    * rotate(dquat(1,0,0,0), oe.i()  , dvec3(0,1,0))
+    * rotate(dquat(1,0,0,0), oe.arg(), dvec3(0,0,1));
   return {q*posInPlane, q*(v*velInPlane)};
 }
 OrbitalElements toOrbitalElements(const StateVector sv, double mu, double epoch) {
-  const dvec3 rv = sv.r;
-  const dvec3 v = sv.v;
+  const dvec3 rv = sv.r();
+  const dvec3 v = sv.v();
   const double r = length(rv);
 
   // Eccentricity
@@ -158,5 +176,5 @@ OrbitalElements toOrbitalElements(const StateVector sv, double mu, double epoch)
   double arg = acos(dot(nv,edir));
   if (ev.z < 0 ) arg = 2.0*pi<double>() - arg;
 
-  return {e, a, i, an, arg, m0};
+  return OrbitalElements(e, a, i, an, arg, m0);
 }
