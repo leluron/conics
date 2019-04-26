@@ -5,7 +5,7 @@ clean:
 	rm -rf *.o ./conics
 
 # Dependencies
-test.o : trajectory.hpp body.hpp
+test.o : trajectory.hpp body.hpp math.hpp
 
 %.o : %.cpp
 	g++ $(FLAGS) -c $< -o $@

@@ -1,5 +1,6 @@
 #include "trajectory.hpp"
 #include "body.hpp"
+#include "math.hpp"
 
 #include <iostream>
 #include <vector>
