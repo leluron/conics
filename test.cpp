@@ -18,6 +18,7 @@ struct trajectory {
 
 int main(void) {
 
+  /*
   System solar;
   auto sun = solar.init(Body(1.32712440018E11));
   auto earth = solar.add(Body(3.986004418E5, 
@@ -60,4 +61,19 @@ int main(void) {
     cout << "abs mag : " << glm::length(abs_sv.r()) << " : " << glm::length(abs_sv.v()) << endl;
     epoch += 1000;
   }
+
+  */
+
+  OrbitalElements oe(0.5, 100, 0,0,0,0);
+  double mu = 1E3;
+  std::vector<double> test_alt = {20,50,100,150,200};
+
+  for (double ep = 0; ep < 300; ep += 100) {
+    for (double alt : test_alt) {
+      double e = epochReachAltitude(oe, mu, alt, ep);
+      double dist = glm::length(toStateVector(oe, mu, e).r());
+      cout << ep << " " << alt << " " << e << " " << dist << endl;
+    }
+  }
+
 }
