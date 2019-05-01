@@ -64,16 +64,19 @@ int main(void) {
 
   */
 
-  OrbitalElements oe(0.5, 100, 0,0,0,0);
-  double mu = 1E3;
-  std::vector<double> test_alt = {20,50,100,150,200};
+  double ecc = 1.00;
+  double peri = 100;
+  double a = (ecc==1.0)?peri:(peri/(1-ecc));
 
-  for (double ep = 0; ep < 300; ep += 100) {
+  OrbitalElements oe(ecc, a, 0,0,0,0.0);
+  double mu = 1E3;
+  std::vector<double> test_alt = {100,500,2000,5000};
+
+  for (double ep = 0; ep < 100; ep += 100) {
     for (double alt : test_alt) {
       double e = epochReachAltitude(oe, mu, alt, ep);
       double dist = glm::length(toStateVector(oe, mu, e).r());
       cout << ep << " " << alt << " " << e << " " << dist << endl;
     }
   }
-
 }
