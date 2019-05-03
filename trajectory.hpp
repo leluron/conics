@@ -51,6 +51,7 @@ std::tuple<double, double> eccToTrue(double En, double e) {
     double d = 1 - e*cos(En);
     return std::make_tuple((cos(En)-e)/d, (sqrt(1-e*e)*sin(En))/d);
   } else {
+    double trueAnomaly = 2*atan(sqrt((e+1)/(e-1))*tanh(En/2));
     double d = 1 - e*cosh(En);
     return std::make_tuple((cosh(En)-e)/d, (sqrt(e*e-1)*sinh(En))/-d);
   }
@@ -70,6 +71,10 @@ public:
   glm::dvec3 r() const { return _r; }
   glm::dvec3 v() const { return _v; }
 };
+
+StateVector operator+(const StateVector sv1, const StateVector sv2) {
+  return StateVector(sv1.r() + sv2.r(), sv1.v() + sv2.v());
+}
 
 // Kepler elements
 class OrbitalElements {
@@ -142,8 +147,9 @@ StateVector toStateVector(OrbitalElements oe, double mu, double epoch) {
 }
 
 // returns epoch of next crossing of given altitude
-// -1 for never
+// +inf for never
 double epochReachAltitude(OrbitalElements oe, double mu, double alt, double epoch) {
+  double inf = std::numeric_limits<double>::infinity();
   double a = oe.a();
   double e = oe.e();
 
@@ -152,7 +158,7 @@ double epochReachAltitude(OrbitalElements oe, double mu, double alt, double epoc
   if (e==1) {
     // parabola :
     // never if q above altitude
-    if (alt < a) return -1;
+    if (alt < a) return inf;
     // get mean anomaly
     double trueAnomaly = acos((2*a/alt)-1);
     double En = trueToEcc(trueAnomaly, e);
@@ -162,13 +168,13 @@ double epochReachAltitude(OrbitalElements oe, double mu, double alt, double epoc
     double epoch1 = (-meanAnomaly - oe.m0())/meanMotion;
     if (epoch < epoch0) return epoch0;
     else if (epoch < epoch1) return epoch1;
-    else return -1;
+    else return inf;
   } else if (e<1) {
     // ellipse : 
     // never if alt out of bounds of min and max alt
     double min = a*((1-e*e)/(1+e));
     double max = a*((1-e*e)/(1-e));
-    if (alt < min || alt > max) return -1;
+    if (alt < min || alt > max) return inf;
     // get mean anomaly
     double trueAnomaly = (e==0)?0:acos(((a*(1-e*e)/alt)-1)/e);
     double En = trueToEcc(trueAnomaly, e);
@@ -180,7 +186,7 @@ double epochReachAltitude(OrbitalElements oe, double mu, double alt, double epoc
     return epoch + diff/meanMotion;
   } else {
     // never if periapsis above altitude
-    if (alt < (a*(1-e*e)/(1+e))) return -1;
+    if (alt < (a*(1-e*e)/(1+e))) return inf;
     // get mean anomaly
     double trueAnomaly = acos(((a*(1-e*e)/alt)-1)/e);
     double En = trueToEcc(trueAnomaly, e);
@@ -190,7 +196,7 @@ double epochReachAltitude(OrbitalElements oe, double mu, double alt, double epoc
     double epoch1 = (-meanAnomaly - oe.m0())/meanMotion;
     if (epoch < epoch0) return epoch0;
     else if (epoch < epoch1) return epoch1;
-    else return -1;
+    else return inf;
   }
 }
 
@@ -210,10 +216,11 @@ OrbitalElements toOrbitalElements(StateVector sv, double mu, double epoch) {
   else nv = normalize(nv);
 
   // Semi-major axis (or q for parabolic orbits)
-  double a_inv = (2.0/r - length2(v)/mu);
-  double a;
-  if (e==1) a = length2(h)/(2*mu);
-  else a = 1.0/a_inv;
+  double a = 1.0/(2.0/r - length2(v)/mu);
+  if (e==1 || a == std::numeric_limits<double>::infinity()) {
+    e = 1;
+    a = length2(h)/(2*mu);
+  }
 
   // True anomaly
   double trueAnomaly = acos(dot(edir,dir));

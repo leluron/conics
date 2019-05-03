@@ -10,18 +10,24 @@
 
 class Body {
 	double mu;
+  double radius;
   double rSOI = std::numeric_limits<double>::infinity();
   std::optional<OrbitalElements> orbit;
 public:
-  Body(double mu) { this->mu = mu; orbit = {};}
-  Body(double mu, OrbitalElements orbit) { this->mu = mu; this->orbit = orbit;}
+  Body(double mu, double radius) { 
+    this->mu = mu; this->radius = radius; orbit = {};
+  }
+  Body(double mu, double radius, OrbitalElements orbit) { 
+    this->mu = mu; this->radius = radius, this->orbit = orbit;
+  }
   void setRSOI(double parent_mu) {
     if (!orbit) return;
     rSOI = this->orbit->a()*pow(this->mu/parent_mu, 0.4);
   }
-  double getMu() { return mu; }
-  double getRSOI() { return rSOI; }
-  OrbitalElements getOrbit() { return orbit.value(); }
+  double getMu() const { return mu; }
+  double getRSOI() const { return rSOI; }
+  double getRadius() const { return radius; }
+  OrbitalElements getOrbit() const { return orbit.value(); }
 };
 
 class System {
@@ -49,7 +55,20 @@ public:
     return bodies.at(id);
   }
 
-  int getParent(int id) {
+  const Body &getBody(int id) const {
+    return bodies.at(id);
+  }
+
+  int getParent(int id) const {
     return parents.at(id);
   }
+
+  std::vector<int> getChildren(int id) const {
+    std::vector<int> children;
+    for (size_t i=0;i<parents.size();i++) {
+      if (parents[i] == id) children.push_back(i);
+    }
+    return children;
+  }
+
 };
