@@ -42,18 +42,15 @@ double eccToMean(double En, double e) {
 // Eccentric anomaly to true anomaly
 // e is eccentricity
 // a is semi major axis
-// Returns cos and sin of true anomaly
-std::tuple<double, double> eccToTrue(double En, double e) {
+// Returns cos of trueAnomaly
+double eccToTrue(double En, double e) {
   if (e == 1) {
-    double d = 1+En*En;
-    return std::make_tuple((1-En*En)/d,(2*En)/d);
+    return (1-En*En)/(1+En*En);
   } else if (e < 1) {
-    double d = 1 - e*cos(En);
-    return std::make_tuple((cos(En)-e)/d, (sqrt(1-e*e)*sin(En))/d);
+    return (cos(En)-e)/(1 - e*cos(En));
   } else {
-    double trueAnomaly = 2*atan(sqrt((e+1)/(e-1))*tanh(En/2));
-    double d = 1 - e*cosh(En);
-    return std::make_tuple((cosh(En)-e)/d, (sqrt(e*e-1)*sinh(En))/-d);
+    //double trueAnomaly = 2*atan(sqrt((e+1)/(e-1))*tanh(En/2));
+    return (cosh(En)-e)/(1 - e*cosh(En));
   }
 }
 
@@ -111,15 +108,14 @@ StateVector toStateVector(OrbitalElements oe, double mu, double epoch) {
   if (e<1) meanAnomaly = fmod(meanAnomaly, 2*pi<float>());
   // Mean anomaly to Eccentric anomaly, to true anomaly
   double En = meanToEcc(meanAnomaly, e);
-  double cosTrueAnomaly, sinTrueAnomaly;
-  std::tie(cosTrueAnomaly, sinTrueAnomaly) = eccToTrue(En, e);
+  double cosTrueAnomaly = eccToTrue(En, e);
   // Distance from parent body
   double p = a*((e==1)?2:(1-e*e));
   double dist = p/(1+e*cosTrueAnomaly);
   // Position of body
   dvec3 posInPlane = dist*dvec3(
     cosTrueAnomaly,
-    sinTrueAnomaly,
+    sqrt(1-cosTrueAnomaly*cosTrueAnomaly),
     0.0);
 
   // Velocity of body
