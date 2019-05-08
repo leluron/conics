@@ -8,20 +8,32 @@
 #include <glm/gtc/constants.hpp>
 #include <glm/gtc/matrix_transform.hpp>
 #include <glm/gtx/norm.hpp>
+#include <functional>
 
+double newton_raphson(std::function<double(double)> f, std::function<double(double)> df, double x0) {
+  double x = x0;
+  int max_iterations = 1E3;
+  for (int i=0;i<max_iterations;i++) {
+    double diff = f(x)/df(x);
+    if (diff == 0.0) break;
+    if (diff != diff) {
+      x *= 0.5;
+      continue;
+    }
+    x -= diff;
+  }
+  return x;
+}
 // Mean anomaly to eccentric anomaly
 // e is eccentricity
 // q is periapsis radius in case of parabolic trajectory
 double meanToEcc(double mean, double e) {
   // Newton to find eccentric anomaly (En)
-  double En = mean; // Starting value of En
-  int it = 20; // Number of iterations
-  for (int i=0;i<it;++i)
-    if (e==1) En -= (En+En*En*En/3-mean)/(1+En*En);
-    else if (e<1) En -= (En - e*sin(En)-mean)/(1-e*cos(En));
-    else En -= (e*sinh(En)-En-mean)/(e*cosh(En)-1);
-  return En;
+  if (e==1) return newton_raphson([mean](double En){return En+En*En*En/3-mean;},[](double En){return 1+En*En;}, mean);
+  else if (e<1) return newton_raphson([mean, e](double En){return En-e*sin(En-mean);}, [e](double En){return 1-e*cos(En);}, mean);
+  else return newton_raphson([mean,e](double En){return e*sinh(En)-En-mean;}, [e](double En){return e*cosh(En)-1;}, mean);
 }
+
 
 // True anomaly to eccentric anomaly
 // e is eccentricity
@@ -95,6 +107,8 @@ public:
 
 using namespace glm;
 
+#include <iostream>
+
 // Orbital elements to state vectors
 // mu is gravitational parameter of body
 // epoch is seconds elapsed since starting epoch
@@ -106,9 +120,12 @@ StateVector toStateVector(OrbitalElements oe, double mu, double epoch) {
   double meanAnomaly = epoch*meanMotion + oe.m0();
   // Cap true anomaly in case of elliptic orbit
   if (e<1) meanAnomaly = fmod(meanAnomaly, 2*pi<float>());
+  std::cout << "N=" << meanAnomaly << " ";
   // Mean anomaly to Eccentric anomaly, to true anomaly
   double En = meanToEcc(meanAnomaly, e);
+  std::cout << "En=" << En << " ";
   double cosTrueAnomaly = eccToTrue(En, e);
+  std::cout << "cosv=" << cosTrueAnomaly << " ";
   // Distance from parent body
   double p = a*((e==1)?2:(1-e*e));
   double dist = p/(1+e*cosTrueAnomaly);

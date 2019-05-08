@@ -62,8 +62,7 @@ vector<trajectory> getTrajectories(int body, StateVector sv, const System &syste
   return next;
 }
 
-int main(void) {
-
+void testSoiLeave() {
   double earth_r = 6371;
   double earth_mu = 3.986004418E5;
 
@@ -92,4 +91,27 @@ int main(void) {
     string endstr[] = {"timedout", "crash", "soi_leave", "soi_enter"};
     cout << t.body << " " << t.orbit.e() << " " << t.end_time << " " << endstr[t.end-timedout] << endl;
   }
+}
+
+void testStateVector() {
+  double earth_r = 6371;
+  double earth_mu = 3.986004418E5;
+
+  double ecc = 10.0;
+  double peri = earth_r+180;
+  double a = (ecc==1)?peri:(peri/(1-ecc));
+  auto oe = OrbitalElements(ecc, a, 0,0,0,0);
+
+  double epoch = 0.0;
+
+  while (epoch < 10000000) {
+    auto rv = toStateVector(oe, earth_mu, epoch);
+    cout << epoch << ": " << glm::to_string(rv.r()) << " " << glm::to_string(rv.v()) << endl;
+    epoch += 10+0.1*epoch;
+  }
+}
+
+int main(void) {
+  testStateVector();
+  
 }
