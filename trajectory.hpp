@@ -120,12 +120,9 @@ StateVector toStateVector(OrbitalElements oe, double mu, double epoch) {
   double meanAnomaly = epoch*meanMotion + oe.m0();
   // Cap true anomaly in case of elliptic orbit
   if (e<1) meanAnomaly = fmod(meanAnomaly, 2*pi<float>());
-  std::cout << "N=" << meanAnomaly << " ";
   // Mean anomaly to Eccentric anomaly, to true anomaly
   double En = meanToEcc(meanAnomaly, e);
-  std::cout << "En=" << En << " ";
   double cosTrueAnomaly = eccToTrue(En, e);
-  std::cout << "cosv=" << cosTrueAnomaly << " ";
   // Distance from parent body
   double p = a*((e==1)?2:(1-e*e));
   double dist = p/(1+e*cosTrueAnomaly);

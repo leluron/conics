@@ -112,6 +112,5 @@ void testStateVector() {
 }
 
 int main(void) {
-  testStateVector();
-  
+  testSoiLeave();
 }
