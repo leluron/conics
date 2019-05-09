@@ -10,16 +10,16 @@
 #include <glm/gtx/norm.hpp>
 #include <functional>
 
+bool isNan(double x) {return x!=x;}
+
 double newton_raphson(std::function<double(double)> f, std::function<double(double)> df, double x0) {
   double x = x0;
+  while (isNan(f(x)/df(x))) x *= 0.5;
+
   int max_iterations = 1E3;
   for (int i=0;i<max_iterations;i++) {
     double diff = f(x)/df(x);
     if (diff == 0.0) break;
-    if (diff != diff) {
-      x *= 0.5;
-      continue;
-    }
     x -= diff;
   }
   return x;
@@ -30,7 +30,7 @@ double newton_raphson(std::function<double(double)> f, std::function<double(doub
 double meanToEcc(double mean, double e) {
   // Newton to find eccentric anomaly (En)
   if (e==1) return newton_raphson([mean](double En){return En+En*En*En/3-mean;},[](double En){return 1+En*En;}, mean);
-  else if (e<1) return newton_raphson([mean, e](double En){return En-e*sin(En-mean);}, [e](double En){return 1-e*cos(En);}, mean);
+  else if (e<1) return newton_raphson([mean, e](double En){return En-e*sin(En)-mean;}, [e](double En){return 1-e*cos(En);}, mean);
   else return newton_raphson([mean,e](double En){return e*sinh(En)-En-mean;}, [e](double En){return e*cosh(En)-1;}, mean);
 }
 
@@ -54,15 +54,17 @@ double eccToMean(double En, double e) {
 // Eccentric anomaly to true anomaly
 // e is eccentricity
 // a is semi major axis
-// Returns cos of trueAnomaly
-double eccToTrue(double En, double e) {
+// Returns cos and sin of true anomaly
+std::tuple<double, double> eccToTrue(double En, double e) {
   if (e == 1) {
-    return (1-En*En)/(1+En*En);
+    double d = 1+En*En;
+    return std::make_tuple((1-En*En)/d,(2*En)/d);
   } else if (e < 1) {
-    return (cos(En)-e)/(1 - e*cos(En));
+    double d = 1 - e*cos(En);
+    return std::make_tuple((cos(En)-e)/d, (sqrt(1-e*e)*sin(En))/d);
   } else {
-    //double trueAnomaly = 2*atan(sqrt((e+1)/(e-1))*tanh(En/2));
-    return (cosh(En)-e)/(1 - e*cosh(En));
+    double d = 1 - e*cosh(En);
+    return std::make_tuple((cosh(En)-e)/d, (sqrt(e*e-1)*sinh(En))/-d);
   }
 }
 
@@ -87,15 +89,16 @@ StateVector operator+(const StateVector sv1, const StateVector sv2) {
 
 // Kepler elements
 class OrbitalElements {
-  double _e, _a, _i, _an, _arg, _m0;
+  double _e, _a, _i, _an, _arg, _m0, _n;
 public:
-  OrbitalElements(double e, double a, double i, double an, double arg, double m0) {
+  OrbitalElements(double e, double a, double i, double an, double arg, double m0, double mu) {
     _e = e;
     _a = a;
     _i = i;
     _an = an;
     _arg = arg;
     _m0 = m0;
+    _n = getMeanMotion(mu, e, a);
   }
   double e() const { return _e; } // eccentricity
   double a() const { return _a; } // semi major axis; altitude of periapsis for parabolic
@@ -103,6 +106,7 @@ public:
   double an() const { return _an; } // longitude of ascending node (radians)
   double arg() const { return _arg; } // argument of periapsis (radians)
   double m0() const { return _m0; } // mean anomaly at epoch = 0
+  double n() const { return _n; } // mean motion
 };
 
 using namespace glm;
@@ -112,29 +116,30 @@ using namespace glm;
 // Orbital elements to state vectors
 // mu is gravitational parameter of body
 // epoch is seconds elapsed since starting epoch
-StateVector toStateVector(OrbitalElements oe, double mu, double epoch) {
+StateVector toStateVector(OrbitalElements oe, double epoch) {
   double a = oe.a();
   double e = oe.e();
   // Mean Anomaly compute
-  double meanMotion = getMeanMotion(mu, e, a);
-  double meanAnomaly = epoch*meanMotion + oe.m0();
+  double meanAnomaly = epoch*oe.n() + oe.m0();
   // Cap true anomaly in case of elliptic orbit
   if (e<1) meanAnomaly = fmod(meanAnomaly, 2*pi<float>());
   // Mean anomaly to Eccentric anomaly, to true anomaly
   double En = meanToEcc(meanAnomaly, e);
-  double cosTrueAnomaly = eccToTrue(En, e);
+  double cosTrueAnomaly, sinTrueAnomaly;
+  std::tie(cosTrueAnomaly, sinTrueAnomaly) = eccToTrue(En, e);
   // Distance from parent body
   double p = a*((e==1)?2:(1-e*e));
   double dist = p/(1+e*cosTrueAnomaly);
   // Position of body
   dvec3 posInPlane = dist*dvec3(
     cosTrueAnomaly,
-    sqrt(1-cosTrueAnomaly*cosTrueAnomaly),
+    sinTrueAnomaly,
     0.0);
 
-  // Velocity of body
+  // Velocity of body (TODO)
+  dvec3 velInPlane = dvec3(0);
+  /*
   double v = (e==1)?sqrt(mu/dist):sqrt(mu*abs(a))/dist;
-  dvec3 velInPlane;
   if (e==1) velInPlane = dvec3(
     -sqrt(1-cosTrueAnomaly),
     sqrt(cosTrueAnomaly+1),
@@ -147,23 +152,24 @@ StateVector toStateVector(OrbitalElements oe, double mu, double epoch) {
     -sinh(En),
     cosh(En)*sqrt(e*e-1),
     0.0);
+  */
 
   // Rotation
   dquat q =
       rotate(dquat(1,0,0,0), oe.an() , dvec3(0,0,1))
     * rotate(dquat(1,0,0,0), oe.i()  , dvec3(0,1,0))
     * rotate(dquat(1,0,0,0), oe.arg(), dvec3(0,0,1));
-  return {q*posInPlane, q*(v*velInPlane)};
+  return {q*posInPlane, q*velInPlane};
 }
 
 // returns epoch of next crossing of given altitude
 // +inf for never
-double epochReachAltitude(OrbitalElements oe, double mu, double alt, double epoch) {
+double epochReachAltitude(OrbitalElements oe, double alt, double epoch) {
   double inf = std::numeric_limits<double>::infinity();
   double a = oe.a();
   double e = oe.e();
 
-  double meanMotion = getMeanMotion(mu, e, a);
+  double meanMotion = oe.n();
 
   if (e==1) {
     // parabola :
@@ -250,5 +256,5 @@ OrbitalElements toOrbitalElements(StateVector sv, double mu, double epoch) {
   double arg = acos(dot(nv,edir));
   if (ev.z < 0 ) arg = 2.0*pi<double>() - arg;
 
-  return OrbitalElements(e, a, i, an, arg, m0);
+  return OrbitalElements(e, a, i, an, arg, m0, mu);
 }
